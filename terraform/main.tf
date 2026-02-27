@@ -44,3 +44,16 @@ resource "azurerm_storage_data_lake_gen2_filesystem" "thirdparty" {
   name               = "thirdparty"
   storage_account_id = azurerm_storage_account.datalake.id
 }
+
+############################################
+# 4) Create new data factory account
+############################################
+resource "azurerm_data_factory" "adf" {
+  name                = "learningshivadatafactory-tf"
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+
+  identity {
+    type = "SystemAssigned"
+  }
+}

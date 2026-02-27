@@ -14,6 +14,7 @@ Azure resources deployed:
 
 - Resource Group
 - Azure Data Lake Storage Acoount
+- Azure Data Factory
 
 ---
 
