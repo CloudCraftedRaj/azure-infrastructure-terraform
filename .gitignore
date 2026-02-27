@@ -6,3 +6,5 @@
 # tfvars (environment secrets)
 *.tfvars
 *.auto.tfvars
+
+.DS_store

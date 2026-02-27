@@ -2,7 +2,7 @@
 # 1) Create new RG
 ############################################
 resource "azurerm_resource_group" "rg" {
-    name = "rg-terraform-practise-learning"
+    name = "rg-terraform-data-project"
     location = "southindia"
 }
 
@@ -19,7 +19,7 @@ resource "random_string" "suffix" {
 # 3) Create new ADLS account
 ############################################
 resource "azurerm_storage_account" "datalake" {
-  name                     = "learningshivadl${random_string.suffix.result}"
+  name                     = "data-projectdl${random_string.suffix.result}"
   resource_group_name      = azurerm_resource_group.rg.name
   location                 = azurerm_resource_group.rg.location
 
@@ -49,7 +49,7 @@ resource "azurerm_storage_data_lake_gen2_filesystem" "thirdparty" {
 # 4) Create new data factory account
 ############################################
 resource "azurerm_data_factory" "adf" {
-  name                = "learningshivadatafactory-tf"
+  name                = "data-projectdatafactory-tf"
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
 
@@ -63,7 +63,7 @@ resource "azurerm_data_factory" "adf" {
 ############################################
 resource "azurerm_mssql_server" "sqlserver" {
   # Must be globally unique
-  name                         = "learningshivamysqldbserver-tf"
+  name                         = "data-projectmysqldbserver-tf"
   resource_group_name          = azurerm_resource_group.rg.name
   location                     = azurerm_resource_group.rg.location
 
@@ -79,13 +79,13 @@ resource "azurerm_mssql_server" "sqlserver" {
 # 6) Azure SQL DB with sample database
 ############################################
 resource "azurerm_mssql_database" "sqldb" {
-  name      = "learningshivasqldb-tf"
+  name      = "data-projectsqldb-tf"
   server_id = azurerm_mssql_server.sqlserver.id
 
   sku_name   = "Basic"
 
   # This creates the SalesLT schema/data (AdventureWorksLT sample)
-  sample_name = "AdventureWorksLT"
+  sample_name = "SalesLT"
 }
 
 # Allow Azure services (ADF, etc.) to access SQL
@@ -102,4 +102,70 @@ resource "azurerm_mssql_firewall_rule" "allow_my_ip" {
   server_id        = azurerm_mssql_server.sqlserver.id
   start_ip_address = var.my_public_ip
   end_ip_address   = var.my_public_ip
+}
+
+locals {
+  # ARM template you exported from OLD ADF
+  adf_template = file("${path.module}/adf_arm/ARMTemplateForFactory.json")
+
+  # NEW ADLS Gen2 endpoint (your Terraform storage account)
+  adls_url = "https://${azurerm_storage_account.datalake.name}.dfs.core.windows.net/"
+
+  # NEW SQL connection (your Terraform SQL server/db)
+  sql_server_fqdn = "${azurerm_mssql_server.sqlserver.name}.database.windows.net"
+  sql_database    = azurerm_mssql_database.sqldb.name
+
+  # These parameter keys MUST match the exported ARMTemplateParametersForFactory.json
+  adf_parameters = {
+    factoryName = {
+      value = azurerm_data_factory.adf.name
+    }
+
+    AzureDataLakeStorage1_accountKey = {
+      value = azurerm_storage_account.datalake.primary_access_key
+    }
+
+    AzureDataLakeStorage1_properties_typeProperties_url = {
+      value = local.adls_url
+    }
+
+    AzureSqlDatabaseConnection_properties_typeProperties_server = {
+      value = local.sql_server_fqdn
+    }
+
+    AzureSqlDatabaseConnection_properties_typeProperties_database = {
+      value = local.sql_database
+    }
+
+    AzureSqlDatabaseConnection_properties_typeProperties_userName = {
+      value = var.sql_admin_username
+    }
+
+    AzureSqlDatabaseConnection_password = {
+      value = var.sql_admin_password
+    }
+
+    RestService1_properties_typeProperties_url = {
+      value = "https://restcountries.com/v3.1/name"
+    }
+  }
+}
+
+############################################
+# 7)Import already existing pipeline,links,datasets JSON Config files to New ADF
+############################################
+
+resource "azurerm_resource_group_template_deployment" "adf_import" {
+  name                = "import-adf-artifacts"
+  resource_group_name = azurerm_resource_group.rg.name
+  deployment_mode     = "Incremental"
+
+  template_content   = local.adf_template
+  parameters_content = jsonencode(local.adf_parameters)
+
+  depends_on = [
+    azurerm_data_factory.adf,
+    azurerm_storage_account.datalake,
+    azurerm_mssql_database.sqldb
+  ]
 }

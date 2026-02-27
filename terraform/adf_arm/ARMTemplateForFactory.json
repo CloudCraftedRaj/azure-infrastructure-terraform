@@ -1,0 +1,1686 @@
+{
+    "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "factoryName": {
+            "type": "string",
+            "metadata": "Data Factory name",
+            "defaultValue": "data-projectdatafactory"
+        },
+        "AzureDataLakeStorage1_accountKey": {
+            "type": "secureString",
+            "metadata": "Secure string for 'accountKey' of 'AzureDataLakeStorage1'"
+        },
+        "AzureSqlDatabaseConnection_password": {
+            "type": "secureString",
+            "metadata": "Secure string for 'password' of 'AzureSqlDatabaseConnection'"
+        },
+        "AzureDataLakeStorage1_properties_typeProperties_url": {
+            "type": "string",
+            "defaultValue": "https://data-projectdatalake.dfs.core.windows.net/"
+        },
+        "AzureSqlDatabaseConnection_properties_typeProperties_server": {
+            "type": "string",
+            "defaultValue": "data-projectmysqldbserver.database.windows.net"
+        },
+        "AzureSqlDatabaseConnection_properties_typeProperties_database": {
+            "type": "string",
+            "defaultValue": "data-projectsqldb"
+        },
+        "AzureSqlDatabaseConnection_properties_typeProperties_userName": {
+            "type": "string",
+            "defaultValue": ""
+        },
+        "RestService1_properties_typeProperties_url": {
+            "type": "string",
+            "defaultValue": "https://restcountries.com/v3.1/name"
+        }
+    },
+    "variables": {
+        "factoryId": "[concat('Microsoft.DataFactory/factories/', parameters('factoryName'))]"
+    },
+    "resources": [
+        {
+            "name": "[concat(parameters('factoryName'), '/copy_table_from_MYSQL_to_ADLS')]",
+            "type": "Microsoft.DataFactory/factories/pipelines",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "description": "This pipeline is used to copy the customer table to ADLS customer folder ",
+                "activities": [
+                    {
+                        "name": "Copy Customer Table to ADLS Customer Folder",
+                        "description": "This action is used to copy the customer table to ADLS customer folder ",
+                        "type": "Copy",
+                        "dependsOn": [],
+                        "policy": {
+                            "timeout": "0.12:00:00",
+                            "retry": 0,
+                            "retryIntervalInSeconds": 30,
+                            "secureOutput": false,
+                            "secureInput": false
+                        },
+                        "userProperties": [],
+                        "typeProperties": {
+                            "source": {
+                                "type": "AzureSqlSource",
+                                "queryTimeout": "02:00:00",
+                                "partitionOption": "None"
+                            },
+                            "sink": {
+                                "type": "DelimitedTextSink",
+                                "storeSettings": {
+                                    "type": "AzureBlobFSWriteSettings"
+                                },
+                                "formatSettings": {
+                                    "type": "DelimitedTextWriteSettings",
+                                    "quoteAllText": true,
+                                    "fileExtension": ".txt"
+                                }
+                            },
+                            "enableStaging": false,
+                            "translator": {
+                                "type": "TabularTranslator",
+                                "typeConversion": true,
+                                "typeConversionSettings": {
+                                    "allowDataTruncation": true,
+                                    "treatBooleanAsNumber": false
+                                }
+                            }
+                        },
+                        "inputs": [
+                            {
+                                "referenceName": "AzureSqlProductTable",
+                                "type": "DatasetReference",
+                                "parameters": {}
+                            }
+                        ],
+                        "outputs": [
+                            {
+                                "referenceName": "AzureADLSCustomerTableCSVDS",
+                                "type": "DatasetReference",
+                                "parameters": {
+                                    "file_name": "productData"
+                                }
+                            }
+                        ]
+                    }
+                ],
+                "policy": {
+                    "elapsedTimeMetric": {}
+                },
+                "annotations": [],
+                "lastPublishTime": "2026-02-15T19:08:00Z"
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/datasets/AzureSqlProductTable')]",
+                "[concat(variables('factoryId'), '/datasets/AzureADLSCustomerTableCSVDS')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/copy_All_table_to_a_folder')]",
+            "type": "Microsoft.DataFactory/factories/pipelines",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "description": "This pipeline is to all table to any folder given according to the table selected",
+                "activities": [
+                    {
+                        "name": "ForEachTable",
+                        "type": "ForEach",
+                        "state": "Inactive",
+                        "onInactiveMarkAs": "Succeeded",
+                        "dependsOn": [
+                            {
+                                "activity": "Lookup All Tables and Pass to Next Step",
+                                "dependencyConditions": [
+                                    "Completed"
+                                ]
+                            }
+                        ],
+                        "userProperties": [],
+                        "typeProperties": {
+                            "items": {
+                                "value": "@activity('Lookup All Tables and Pass to Next Step').output.value",
+                                "type": "Expression"
+                            },
+                            "isSequential": true,
+                            "activities": [
+                                {
+                                    "name": "Copy all tabes given in foreach will be copied",
+                                    "type": "Copy",
+                                    "dependsOn": [],
+                                    "policy": {
+                                        "timeout": "0.12:00:00",
+                                        "retry": 0,
+                                        "retryIntervalInSeconds": 30,
+                                        "secureOutput": false,
+                                        "secureInput": false
+                                    },
+                                    "userProperties": [],
+                                    "typeProperties": {
+                                        "source": {
+                                            "type": "AzureSqlSource",
+                                            "queryTimeout": "02:00:00",
+                                            "partitionOption": "None"
+                                        },
+                                        "sink": {
+                                            "type": "JsonSink",
+                                            "storeSettings": {
+                                                "type": "AzureBlobFSWriteSettings"
+                                            },
+                                            "formatSettings": {
+                                                "type": "JsonWriteSettings"
+                                            }
+                                        },
+                                        "enableStaging": false
+                                    },
+                                    "inputs": [
+                                        {
+                                            "referenceName": "AzureSqlAnyTableASaInput",
+                                            "type": "DatasetReference",
+                                            "parameters": {
+                                                "table_name": {
+                                                    "value": "@item().table_name",
+                                                    "type": "Expression"
+                                                },
+                                                "schema_name": "saleslt"
+                                            }
+                                        }
+                                    ],
+                                    "outputs": [
+                                        {
+                                            "referenceName": "conver_to_json",
+                                            "type": "DatasetReference",
+                                            "parameters": {
+                                                "folder_name": {
+                                                    "value": "@item().table_name",
+                                                    "type": "Expression"
+                                                }
+                                            }
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "name": "Lookup All Tables and Pass to Next Step",
+                        "type": "Lookup",
+                        "dependsOn": [],
+                        "policy": {
+                            "timeout": "0.12:00:00",
+                            "retry": 0,
+                            "retryIntervalInSeconds": 30,
+                            "secureOutput": false,
+                            "secureInput": false
+                        },
+                        "userProperties": [],
+                        "typeProperties": {
+                            "source": {
+                                "type": "AzureSqlSource",
+                                "sqlReaderQuery": "select table_name from information_Schema.tables where table_schema='saleslt'",
+                                "queryTimeout": "02:00:00",
+                                "partitionOption": "None"
+                            },
+                            "dataset": {
+                                "referenceName": "AzureSqlCustomerTableDS",
+                                "type": "DatasetReference",
+                                "parameters": {}
+                            },
+                            "firstRowOnly": false
+                        }
+                    }
+                ],
+                "policy": {
+                    "elapsedTimeMetric": {}
+                },
+                "annotations": [],
+                "lastPublishTime": "2026-02-13T00:10:03Z"
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/datasets/AzureSqlCustomerTableDS')]",
+                "[concat(variables('factoryId'), '/datasets/AzureSqlAnyTableASaInput')]",
+                "[concat(variables('factoryId'), '/datasets/conver_to_json')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/If_condition_check_copy_action')]",
+            "type": "Microsoft.DataFactory/factories/pipelines",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "description": "If product size is greater than 200 then copy to adls",
+                "activities": [
+                    {
+                        "name": "Total Count of Product Table",
+                        "type": "Lookup",
+                        "dependsOn": [],
+                        "policy": {
+                            "timeout": "0.12:00:00",
+                            "retry": 0,
+                            "retryIntervalInSeconds": 30,
+                            "secureOutput": false,
+                            "secureInput": false
+                        },
+                        "userProperties": [],
+                        "typeProperties": {
+                            "source": {
+                                "type": "AzureSqlSource",
+                                "sqlReaderQuery": "select count(*) as totalCount from saleslt.product",
+                                "queryTimeout": "02:00:00",
+                                "partitionOption": "None"
+                            },
+                            "dataset": {
+                                "referenceName": "AzureSqlCustomerTableDS",
+                                "type": "DatasetReference",
+                                "parameters": {}
+                            },
+                            "firstRowOnly": true
+                        }
+                    },
+                    {
+                        "name": "If product table count is greater than 200",
+                        "type": "IfCondition",
+                        "dependsOn": [
+                            {
+                                "activity": "Total Count of Product Table",
+                                "dependencyConditions": [
+                                    "Succeeded"
+                                ]
+                            }
+                        ],
+                        "userProperties": [],
+                        "typeProperties": {
+                            "expression": {
+                                "value": "@greater(activity('Total Count of Product Table').output.firstRow.totalCount,200)",
+                                "type": "Expression"
+                            },
+                            "ifTrueActivities": [
+                                {
+                                    "name": "Copy product data to ADLS CSV",
+                                    "type": "Copy",
+                                    "dependsOn": [],
+                                    "policy": {
+                                        "timeout": "0.12:00:00",
+                                        "retry": 0,
+                                        "retryIntervalInSeconds": 30,
+                                        "secureOutput": false,
+                                        "secureInput": false
+                                    },
+                                    "userProperties": [],
+                                    "typeProperties": {
+                                        "source": {
+                                            "type": "AzureSqlSource",
+                                            "queryTimeout": "02:00:00",
+                                            "partitionOption": "None"
+                                        },
+                                        "sink": {
+                                            "type": "DelimitedTextSink",
+                                            "storeSettings": {
+                                                "type": "AzureBlobFSWriteSettings"
+                                            },
+                                            "formatSettings": {
+                                                "type": "DelimitedTextWriteSettings",
+                                                "quoteAllText": true,
+                                                "fileExtension": ".txt"
+                                            }
+                                        },
+                                        "enableStaging": false,
+                                        "translator": {
+                                            "type": "TabularTranslator",
+                                            "typeConversion": true,
+                                            "typeConversionSettings": {
+                                                "allowDataTruncation": true,
+                                                "treatBooleanAsNumber": false
+                                            }
+                                        }
+                                    },
+                                    "inputs": [
+                                        {
+                                            "referenceName": "AzureSqlProductTable",
+                                            "type": "DatasetReference",
+                                            "parameters": {}
+                                        }
+                                    ],
+                                    "outputs": [
+                                        {
+                                            "referenceName": "Store_in_CSV_Any_Folder_Parameter_copy1",
+                                            "type": "DatasetReference",
+                                            "parameters": {}
+                                        }
+                                    ]
+                                },
+                                {
+                                    "name": "Execute Pipeline NestedIf to check and copy",
+                                    "description": "This will execute NestedIf Pipelline",
+                                    "type": "ExecutePipeline",
+                                    "dependsOn": [
+                                        {
+                                            "activity": "Copy product data to ADLS CSV",
+                                            "dependencyConditions": [
+                                                "Succeeded"
+                                            ]
+                                        }
+                                    ],
+                                    "policy": {
+                                        "secureInput": false
+                                    },
+                                    "userProperties": [],
+                                    "typeProperties": {
+                                        "pipeline": {
+                                            "referenceName": "NestedIf_condition_check_copy_action_copy1",
+                                            "type": "PipelineReference"
+                                        },
+                                        "waitOnCompletion": true,
+                                        "parameters": {}
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "policy": {
+                    "elapsedTimeMetric": {}
+                },
+                "annotations": [],
+                "lastPublishTime": "2026-02-13T20:34:09Z"
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/datasets/AzureSqlCustomerTableDS')]",
+                "[concat(variables('factoryId'), '/datasets/AzureSqlProductTable')]",
+                "[concat(variables('factoryId'), '/datasets/Store_in_CSV_Any_Folder_Parameter_copy1')]",
+                "[concat(variables('factoryId'), '/pipelines/NestedIf_condition_check_copy_action_copy1')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/NestedIf_condition_check_copy_action_copy1')]",
+            "type": "Microsoft.DataFactory/factories/pipelines",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "description": "If product size is greater than 200 then copy to adls also if customer count is > 500 then copy customer to aadls",
+                "activities": [
+                    {
+                        "name": "Total Count of Customer Table",
+                        "type": "Lookup",
+                        "dependsOn": [],
+                        "policy": {
+                            "timeout": "0.12:00:00",
+                            "retry": 0,
+                            "retryIntervalInSeconds": 30,
+                            "secureOutput": false,
+                            "secureInput": false
+                        },
+                        "userProperties": [],
+                        "typeProperties": {
+                            "source": {
+                                "type": "AzureSqlSource",
+                                "sqlReaderQuery": "select count(*) as totalCount from saleslt.customer",
+                                "queryTimeout": "02:00:00",
+                                "partitionOption": "None"
+                            },
+                            "dataset": {
+                                "referenceName": "AzureSqlCustomerTableDS",
+                                "type": "DatasetReference",
+                                "parameters": {}
+                            },
+                            "firstRowOnly": true
+                        }
+                    },
+                    {
+                        "name": "If customer table count is greater than 500",
+                        "type": "IfCondition",
+                        "dependsOn": [
+                            {
+                                "activity": "Total Count of Customer Table",
+                                "dependencyConditions": [
+                                    "Succeeded"
+                                ]
+                            }
+                        ],
+                        "userProperties": [],
+                        "typeProperties": {
+                            "expression": {
+                                "value": "@greater(activity('Total Count of Customer Table').output.firstRow.totalCount,500)",
+                                "type": "Expression"
+                            },
+                            "ifTrueActivities": [
+                                {
+                                    "name": "Copy product data to ADLS CSV",
+                                    "type": "Copy",
+                                    "dependsOn": [],
+                                    "policy": {
+                                        "timeout": "0.12:00:00",
+                                        "retry": 0,
+                                        "retryIntervalInSeconds": 30,
+                                        "secureOutput": false,
+                                        "secureInput": false
+                                    },
+                                    "userProperties": [],
+                                    "typeProperties": {
+                                        "source": {
+                                            "type": "AzureSqlSource",
+                                            "queryTimeout": "02:00:00",
+                                            "partitionOption": "None"
+                                        },
+                                        "sink": {
+                                            "type": "DelimitedTextSink",
+                                            "storeSettings": {
+                                                "type": "AzureBlobFSWriteSettings"
+                                            },
+                                            "formatSettings": {
+                                                "type": "DelimitedTextWriteSettings",
+                                                "quoteAllText": true,
+                                                "fileExtension": ".txt"
+                                            }
+                                        },
+                                        "enableStaging": false,
+                                        "translator": {
+                                            "type": "TabularTranslator",
+                                            "typeConversion": true,
+                                            "typeConversionSettings": {
+                                                "allowDataTruncation": true,
+                                                "treatBooleanAsNumber": false
+                                            }
+                                        }
+                                    },
+                                    "inputs": [
+                                        {
+                                            "referenceName": "AzureSqlCustomerTableDS",
+                                            "type": "DatasetReference",
+                                            "parameters": {}
+                                        }
+                                    ],
+                                    "outputs": [
+                                        {
+                                            "referenceName": "Store_in_CSV_Any_Folder_Parameter_copy1",
+                                            "type": "DatasetReference",
+                                            "parameters": {}
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "policy": {
+                    "elapsedTimeMetric": {}
+                },
+                "annotations": [],
+                "lastPublishTime": "2026-02-13T20:34:09Z"
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/datasets/AzureSqlCustomerTableDS')]",
+                "[concat(variables('factoryId'), '/datasets/Store_in_CSV_Any_Folder_Parameter_copy1')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/Meta_data_pipeline')]",
+            "type": "Microsoft.DataFactory/factories/pipelines",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "description": "If file exists copy that file to ADLS",
+                "activities": [
+                    {
+                        "name": "Check file exists",
+                        "description": "Check file exists or not",
+                        "type": "GetMetadata",
+                        "dependsOn": [],
+                        "policy": {
+                            "timeout": "0.12:00:00",
+                            "retry": 0,
+                            "retryIntervalInSeconds": 30,
+                            "secureOutput": false,
+                            "secureInput": false
+                        },
+                        "userProperties": [],
+                        "typeProperties": {
+                            "dataset": {
+                                "referenceName": "csv_thirdparty_container",
+                                "type": "DatasetReference",
+                                "parameters": {
+                                    "file_name": "customer_data"
+                                }
+                            },
+                            "fieldList": [
+                                "exists",
+                                "itemName"
+                            ],
+                            "storeSettings": {
+                                "type": "AzureBlobStorageReadSettings",
+                                "recursive": true,
+                                "enablePartitionDiscovery": false
+                            },
+                            "formatSettings": {
+                                "type": "DelimitedTextReadSettings"
+                            }
+                        }
+                    },
+                    {
+                        "name": "Run If file exists",
+                        "type": "IfCondition",
+                        "dependsOn": [
+                            {
+                                "activity": "Check file exists",
+                                "dependencyConditions": [
+                                    "Succeeded"
+                                ]
+                            }
+                        ],
+                        "userProperties": [],
+                        "typeProperties": {
+                            "expression": {
+                                "value": "@activity('Check file exists').output.exists",
+                                "type": "Expression"
+                            },
+                            "ifTrueActivities": [
+                                {
+                                    "name": "Copy product table to thirdparty container",
+                                    "type": "Copy",
+                                    "dependsOn": [],
+                                    "policy": {
+                                        "timeout": "0.12:00:00",
+                                        "retry": 0,
+                                        "retryIntervalInSeconds": 30,
+                                        "secureOutput": false,
+                                        "secureInput": false
+                                    },
+                                    "userProperties": [],
+                                    "typeProperties": {
+                                        "source": {
+                                            "type": "DelimitedTextSource",
+                                            "storeSettings": {
+                                                "type": "AzureBlobFSReadSettings",
+                                                "recursive": true,
+                                                "enablePartitionDiscovery": false
+                                            },
+                                            "formatSettings": {
+                                                "type": "DelimitedTextReadSettings"
+                                            }
+                                        },
+                                        "sink": {
+                                            "type": "DelimitedTextSink",
+                                            "storeSettings": {
+                                                "type": "AzureBlobFSWriteSettings"
+                                            },
+                                            "formatSettings": {
+                                                "type": "DelimitedTextWriteSettings",
+                                                "quoteAllText": true,
+                                                "fileExtension": ".txt"
+                                            }
+                                        },
+                                        "enableStaging": false,
+                                        "translator": {
+                                            "type": "TabularTranslator",
+                                            "typeConversion": true,
+                                            "typeConversionSettings": {
+                                                "allowDataTruncation": true,
+                                                "treatBooleanAsNumber": false
+                                            }
+                                        }
+                                    },
+                                    "inputs": [
+                                        {
+                                            "referenceName": "csv_thirdparty_container",
+                                            "type": "DatasetReference",
+                                            "parameters": {
+                                                "file_name": {
+                                                    "value": "@activity('Check file exists').output.itemName",
+                                                    "type": "Expression"
+                                                }
+                                            }
+                                        }
+                                    ],
+                                    "outputs": [
+                                        {
+                                            "referenceName": "Store_in_CSV_Any_Folder_Parameter",
+                                            "type": "DatasetReference",
+                                            "parameters": {
+                                                "Table_Folder": "product/2026/02",
+                                                "file_name": {
+                                                    "value": "@activity('Check file exists').output.itemName",
+                                                    "type": "Expression"
+                                                }
+                                            }
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "policy": {
+                    "elapsedTimeMetric": {}
+                },
+                "annotations": [],
+                "lastPublishTime": "2026-02-13T21:56:00Z"
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/datasets/csv_thirdparty_container')]",
+                "[concat(variables('factoryId'), '/datasets/Store_in_CSV_Any_Folder_Parameter')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/Meta_data_forloop_pipeline')]",
+            "type": "Microsoft.DataFactory/factories/pipelines",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "description": "If file exists copy that file to ADLS",
+                "activities": [
+                    {
+                        "name": "check array of childitems",
+                        "type": "ForEach",
+                        "dependsOn": [
+                            {
+                                "activity": "Get the folder metadata",
+                                "dependencyConditions": [
+                                    "Succeeded"
+                                ]
+                            }
+                        ],
+                        "userProperties": [],
+                        "typeProperties": {
+                            "items": {
+                                "value": "@activity('Get the folder metadata').output.childItems",
+                                "type": "Expression"
+                            },
+                            "isSequential": true,
+                            "activities": [
+                                {
+                                    "name": "If Condition1",
+                                    "type": "IfCondition",
+                                    "dependsOn": [],
+                                    "userProperties": [],
+                                    "typeProperties": {
+                                        "expression": {
+                                            "value": "@equals(item().type,'File')",
+                                            "type": "Expression"
+                                        },
+                                        "ifTrueActivities": [
+                                            {
+                                                "name": "Copy data1",
+                                                "type": "Copy",
+                                                "dependsOn": [],
+                                                "policy": {
+                                                    "timeout": "0.12:00:00",
+                                                    "retry": 0,
+                                                    "retryIntervalInSeconds": 30,
+                                                    "secureOutput": false,
+                                                    "secureInput": false
+                                                },
+                                                "userProperties": [],
+                                                "typeProperties": {
+                                                    "source": {
+                                                        "type": "DelimitedTextSource",
+                                                        "storeSettings": {
+                                                            "type": "AzureBlobFSReadSettings",
+                                                            "recursive": true,
+                                                            "enablePartitionDiscovery": false
+                                                        },
+                                                        "formatSettings": {
+                                                            "type": "DelimitedTextReadSettings"
+                                                        }
+                                                    },
+                                                    "sink": {
+                                                        "type": "DelimitedTextSink",
+                                                        "storeSettings": {
+                                                            "type": "AzureBlobFSWriteSettings"
+                                                        },
+                                                        "formatSettings": {
+                                                            "type": "DelimitedTextWriteSettings",
+                                                            "quoteAllText": true,
+                                                            "fileExtension": ".txt"
+                                                        }
+                                                    },
+                                                    "enableStaging": false,
+                                                    "translator": {
+                                                        "type": "TabularTranslator",
+                                                        "typeConversion": true,
+                                                        "typeConversionSettings": {
+                                                            "allowDataTruncation": true,
+                                                            "treatBooleanAsNumber": false
+                                                        }
+                                                    }
+                                                },
+                                                "inputs": [
+                                                    {
+                                                        "referenceName": "csv_thirdparty_container",
+                                                        "type": "DatasetReference",
+                                                        "parameters": {
+                                                            "file_name": {
+                                                                "value": "@item().name",
+                                                                "type": "Expression"
+                                                            }
+                                                        }
+                                                    }
+                                                ],
+                                                "outputs": [
+                                                    {
+                                                        "referenceName": "AzureADLSCustomerTableCSVDS",
+                                                        "type": "DatasetReference",
+                                                        "parameters": {
+                                                            "file_name": {
+                                                                "value": "@item().name",
+                                                                "type": "Expression"
+                                                            }
+                                                        }
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "name": "Get the folder metadata",
+                        "description": "folder metadata",
+                        "type": "GetMetadata",
+                        "dependsOn": [],
+                        "policy": {
+                            "timeout": "0.12:00:00",
+                            "retry": 0,
+                            "retryIntervalInSeconds": 30,
+                            "secureOutput": false,
+                            "secureInput": false
+                        },
+                        "userProperties": [],
+                        "typeProperties": {
+                            "dataset": {
+                                "referenceName": "for_metadata_forloop",
+                                "type": "DatasetReference",
+                                "parameters": {}
+                            },
+                            "fieldList": [
+                                "childItems"
+                            ],
+                            "storeSettings": {
+                                "type": "AzureBlobStorageReadSettings",
+                                "recursive": true,
+                                "enablePartitionDiscovery": false
+                            },
+                            "formatSettings": {
+                                "type": "DelimitedTextReadSettings"
+                            }
+                        }
+                    }
+                ],
+                "policy": {
+                    "elapsedTimeMetric": {}
+                },
+                "annotations": [],
+                "lastPublishTime": "2026-02-13T21:56:00Z"
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/datasets/for_metadata_forloop')]",
+                "[concat(variables('factoryId'), '/datasets/csv_thirdparty_container')]",
+                "[concat(variables('factoryId'), '/datasets/AzureADLSCustomerTableCSVDS')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/Rest API Example')]",
+            "type": "Microsoft.DataFactory/factories/pipelines",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "description": "This pipeline is going to get the json object through the Rest API and copy to ADLS Location",
+                "activities": [
+                    {
+                        "name": "Get Rest API Data For Countries List",
+                        "type": "Copy",
+                        "dependsOn": [],
+                        "policy": {
+                            "timeout": "0.12:00:00",
+                            "retry": 0,
+                            "retryIntervalInSeconds": 30,
+                            "secureOutput": false,
+                            "secureInput": false
+                        },
+                        "userProperties": [],
+                        "typeProperties": {
+                            "source": {
+                                "type": "RestSource",
+                                "httpRequestTimeout": "00:01:40",
+                                "requestInterval": "00.00:00:00.010",
+                                "requestMethod": "GET",
+                                "paginationRules": {
+                                    "supportRFC5988": "true"
+                                }
+                            },
+                            "sink": {
+                                "type": "JsonSink",
+                                "storeSettings": {
+                                    "type": "AzureBlobFSWriteSettings"
+                                },
+                                "formatSettings": {
+                                    "type": "JsonWriteSettings"
+                                }
+                            },
+                            "enableStaging": false
+                        },
+                        "inputs": [
+                            {
+                                "referenceName": "RestResourceFromAllCountriesListAPI",
+                                "type": "DatasetReference",
+                                "parameters": {
+                                    "field_name": "name"
+                                }
+                            }
+                        ],
+                        "outputs": [
+                            {
+                                "referenceName": "conver_to_json",
+                                "type": "DatasetReference",
+                                "parameters": {
+                                    "folder_name": "Rest-Json"
+                                }
+                            }
+                        ]
+                    }
+                ],
+                "policy": {
+                    "elapsedTimeMetric": {}
+                },
+                "annotations": [],
+                "lastPublishTime": "2026-02-15T00:30:23Z"
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/datasets/RestResourceFromAllCountriesListAPI')]",
+                "[concat(variables('factoryId'), '/datasets/conver_to_json')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/Data-Flow-Pipeline-1')]",
+            "type": "Microsoft.DataFactory/factories/pipelines",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "description": "This pipeline is to transform the product data and sink at ADLS location",
+                "activities": [
+                    {
+                        "name": "Data-flow-1",
+                        "type": "ExecuteDataFlow",
+                        "dependsOn": [],
+                        "policy": {
+                            "timeout": "0.12:00:00",
+                            "retry": 0,
+                            "retryIntervalInSeconds": 30,
+                            "secureOutput": false,
+                            "secureInput": false
+                        },
+                        "userProperties": [],
+                        "typeProperties": {
+                            "dataflow": {
+                                "referenceName": "Data-Flow-1",
+                                "type": "DataFlowReference",
+                                "parameters": {},
+                                "datasetParameters": {
+                                    "InputProductFile": {},
+                                    "sinkToMYSQL": {}
+                                }
+                            },
+                            "staging": {},
+                            "compute": {
+                                "coreCount": 8,
+                                "computeType": "General"
+                            },
+                            "traceLevel": "Fine"
+                        }
+                    }
+                ],
+                "policy": {
+                    "elapsedTimeMetric": {}
+                },
+                "annotations": [],
+                "lastPublishTime": "2026-02-15T19:10:41Z"
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/dataflows/Data-Flow-1')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/AzureDataLakeStorage1')]",
+            "type": "Microsoft.DataFactory/factories/linkedServices",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "description": "This is to connect from ADF to ADLS",
+                "annotations": [],
+                "type": "AzureBlobFS",
+                "typeProperties": {
+                    "url": "[parameters('AzureDataLakeStorage1_properties_typeProperties_url')]",
+                    "accountKey": {
+                        "type": "SecureString",
+                        "value": "[parameters('AzureDataLakeStorage1_accountKey')]"
+                    }
+                }
+            },
+            "dependsOn": []
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/AzureSqlDatabaseConnection')]",
+            "type": "Microsoft.DataFactory/factories/linkedServices",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "description": "This is to connect to sql db using login credentials from ADF",
+                "annotations": [],
+                "type": "AzureSqlDatabase",
+                "typeProperties": {
+                    "server": "[parameters('AzureSqlDatabaseConnection_properties_typeProperties_server')]",
+                    "database": "[parameters('AzureSqlDatabaseConnection_properties_typeProperties_database')]",
+                    "encrypt": "mandatory",
+                    "trustServerCertificate": false,
+                    "authenticationType": "SQL",
+                    "userName": "[parameters('AzureSqlDatabaseConnection_properties_typeProperties_userName')]",
+                    "password": {
+                        "type": "SecureString",
+                        "value": "[parameters('AzureSqlDatabaseConnection_password')]"
+                    }
+                }
+            },
+            "dependsOn": []
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/RestService1')]",
+            "type": "Microsoft.DataFactory/factories/linkedServices",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "annotations": [],
+                "type": "RestService",
+                "typeProperties": {
+                    "url": "[parameters('RestService1_properties_typeProperties_url')]",
+                    "enableServerCertificateValidation": true,
+                    "authenticationType": "Anonymous"
+                }
+            },
+            "dependsOn": []
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/AzureSqlCustomerTableDS')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "AzureSqlDatabaseConnection",
+                    "type": "LinkedServiceReference"
+                },
+                "annotations": [],
+                "type": "AzureSqlTable",
+                "schema": [
+                    {
+                        "name": "CustomerID",
+                        "type": "int",
+                        "precision": 10
+                    },
+                    {
+                        "name": "NameStyle",
+                        "type": "bit"
+                    },
+                    {
+                        "name": "Title",
+                        "type": "nvarchar"
+                    },
+                    {
+                        "name": "FirstName",
+                        "type": "nvarchar"
+                    },
+                    {
+                        "name": "MiddleName",
+                        "type": "nvarchar"
+                    },
+                    {
+                        "name": "LastName",
+                        "type": "nvarchar"
+                    },
+                    {
+                        "name": "Suffix",
+                        "type": "nvarchar"
+                    },
+                    {
+                        "name": "CompanyName",
+                        "type": "nvarchar"
+                    },
+                    {
+                        "name": "SalesPerson",
+                        "type": "nvarchar"
+                    },
+                    {
+                        "name": "EmailAddress",
+                        "type": "nvarchar"
+                    },
+                    {
+                        "name": "Phone",
+                        "type": "nvarchar"
+                    },
+                    {
+                        "name": "PasswordHash",
+                        "type": "varchar"
+                    },
+                    {
+                        "name": "PasswordSalt",
+                        "type": "varchar"
+                    },
+                    {
+                        "name": "rowguid",
+                        "type": "uniqueidentifier"
+                    },
+                    {
+                        "name": "ModifiedDate",
+                        "type": "datetime",
+                        "precision": 23,
+                        "scale": 3
+                    }
+                ],
+                "typeProperties": {
+                    "schema": "SalesLT",
+                    "table": "Customer"
+                }
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/AzureSqlDatabaseConnection')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/AzureADLSCustomerTableCSVDS')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "AzureDataLakeStorage1",
+                    "type": "LinkedServiceReference"
+                },
+                "parameters": {
+                    "file_name": {
+                        "type": "string"
+                    }
+                },
+                "annotations": [],
+                "type": "DelimitedText",
+                "typeProperties": {
+                    "location": {
+                        "type": "AzureBlobFSLocation",
+                        "fileName": {
+                            "value": "@dataset().file_name",
+                            "type": "Expression"
+                        },
+                        "folderPath": "Customer",
+                        "fileSystem": "landings"
+                    },
+                    "columnDelimiter": ",",
+                    "escapeChar": "\\",
+                    "firstRowAsHeader": true,
+                    "quoteChar": "\""
+                },
+                "schema": []
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/AzureDataLakeStorage1')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/AzureSqlAnyTableASaInput')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "description": "This is with parameters so that we don't restrict to get only from one table",
+                "linkedServiceName": {
+                    "referenceName": "AzureSqlDatabaseConnection",
+                    "type": "LinkedServiceReference"
+                },
+                "parameters": {
+                    "table_name": {
+                        "type": "string"
+                    },
+                    "schema_name": {
+                        "type": "string",
+                        "defaultValue": "saleslt"
+                    }
+                },
+                "annotations": [],
+                "type": "AzureSqlTable",
+                "schema": [],
+                "typeProperties": {
+                    "schema": {
+                        "value": "@dataset().schema_name",
+                        "type": "Expression"
+                    },
+                    "table": {
+                        "value": "@dataset().table_name",
+                        "type": "Expression"
+                    }
+                }
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/AzureSqlDatabaseConnection')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/conver_to_json')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "description": "This is to store JSON data",
+                "linkedServiceName": {
+                    "referenceName": "AzureDataLakeStorage1",
+                    "type": "LinkedServiceReference"
+                },
+                "parameters": {
+                    "folder_name": {
+                        "type": "string"
+                    }
+                },
+                "annotations": [],
+                "type": "Json",
+                "typeProperties": {
+                    "location": {
+                        "type": "AzureBlobFSLocation",
+                        "folderPath": {
+                            "value": "@dataset().folder_name",
+                            "type": "Expression"
+                        },
+                        "fileSystem": "landings"
+                    }
+                },
+                "schema": {}
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/AzureDataLakeStorage1')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/AzureSqlProductTable')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "AzureSqlDatabaseConnection",
+                    "type": "LinkedServiceReference"
+                },
+                "annotations": [],
+                "type": "AzureSqlTable",
+                "schema": [
+                    {
+                        "name": "ProductID",
+                        "type": "int",
+                        "precision": 10
+                    },
+                    {
+                        "name": "Name",
+                        "type": "nvarchar"
+                    },
+                    {
+                        "name": "ProductNumber",
+                        "type": "nvarchar"
+                    },
+                    {
+                        "name": "Color",
+                        "type": "nvarchar"
+                    },
+                    {
+                        "name": "StandardCost",
+                        "type": "money",
+                        "precision": 19,
+                        "scale": 4
+                    },
+                    {
+                        "name": "ListPrice",
+                        "type": "money",
+                        "precision": 19,
+                        "scale": 4
+                    },
+                    {
+                        "name": "Size",
+                        "type": "nvarchar"
+                    },
+                    {
+                        "name": "Weight",
+                        "type": "decimal",
+                        "precision": 8,
+                        "scale": 2
+                    },
+                    {
+                        "name": "ProductCategoryID",
+                        "type": "int",
+                        "precision": 10
+                    },
+                    {
+                        "name": "ProductModelID",
+                        "type": "int",
+                        "precision": 10
+                    },
+                    {
+                        "name": "SellStartDate",
+                        "type": "datetime",
+                        "precision": 23,
+                        "scale": 3
+                    },
+                    {
+                        "name": "SellEndDate",
+                        "type": "datetime",
+                        "precision": 23,
+                        "scale": 3
+                    },
+                    {
+                        "name": "DiscontinuedDate",
+                        "type": "datetime",
+                        "precision": 23,
+                        "scale": 3
+                    },
+                    {
+                        "name": "ThumbNailPhoto",
+                        "type": "varbinary"
+                    },
+                    {
+                        "name": "ThumbnailPhotoFileName",
+                        "type": "nvarchar"
+                    },
+                    {
+                        "name": "rowguid",
+                        "type": "uniqueidentifier"
+                    },
+                    {
+                        "name": "ModifiedDate",
+                        "type": "datetime",
+                        "precision": 23,
+                        "scale": 3
+                    }
+                ],
+                "typeProperties": {
+                    "schema": "SalesLT",
+                    "table": "Product"
+                }
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/AzureSqlDatabaseConnection')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/Store_in_CSV_Any_Folder_Parameter')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "AzureDataLakeStorage1",
+                    "type": "LinkedServiceReference"
+                },
+                "parameters": {
+                    "Table_Folder": {
+                        "type": "string"
+                    },
+                    "file_name": {
+                        "type": "string"
+                    }
+                },
+                "annotations": [],
+                "type": "DelimitedText",
+                "typeProperties": {
+                    "location": {
+                        "type": "AzureBlobFSLocation",
+                        "fileName": {
+                            "value": "@dataset().file_name",
+                            "type": "Expression"
+                        },
+                        "folderPath": {
+                            "value": "@dataset().Table_Folder",
+                            "type": "Expression"
+                        },
+                        "fileSystem": "landings"
+                    },
+                    "columnDelimiter": ",",
+                    "escapeChar": "\\",
+                    "firstRowAsHeader": true,
+                    "quoteChar": "\""
+                },
+                "schema": []
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/AzureDataLakeStorage1')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/Store_in_CSV_Any_Folder_Parameter_copy1')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "AzureDataLakeStorage1",
+                    "type": "LinkedServiceReference"
+                },
+                "annotations": [],
+                "type": "DelimitedText",
+                "typeProperties": {
+                    "location": {
+                        "type": "AzureBlobFSLocation",
+                        "fileSystem": "landings"
+                    },
+                    "columnDelimiter": ",",
+                    "escapeChar": "\\",
+                    "firstRowAsHeader": true,
+                    "quoteChar": "\""
+                },
+                "schema": []
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/AzureDataLakeStorage1')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/csv_thirdparty_container')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "AzureDataLakeStorage1",
+                    "type": "LinkedServiceReference"
+                },
+                "parameters": {
+                    "file_name": {
+                        "type": "string"
+                    }
+                },
+                "annotations": [],
+                "type": "DelimitedText",
+                "typeProperties": {
+                    "location": {
+                        "type": "AzureBlobFSLocation",
+                        "fileName": {
+                            "value": "@dataset().file_name",
+                            "type": "Expression"
+                        },
+                        "folderPath": "metadata-thridparty",
+                        "fileSystem": "thirdparty"
+                    },
+                    "columnDelimiter": ",",
+                    "escapeChar": "\\",
+                    "firstRowAsHeader": true,
+                    "quoteChar": "\""
+                },
+                "schema": []
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/AzureDataLakeStorage1')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/for_metadata_forloop')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "AzureDataLakeStorage1",
+                    "type": "LinkedServiceReference"
+                },
+                "annotations": [],
+                "type": "DelimitedText",
+                "typeProperties": {
+                    "location": {
+                        "type": "AzureBlobFSLocation",
+                        "folderPath": "metadata-thridparty",
+                        "fileSystem": "thirdparty"
+                    },
+                    "columnDelimiter": ",",
+                    "escapeChar": "\\",
+                    "firstRowAsHeader": true,
+                    "quoteChar": "\""
+                },
+                "schema": []
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/AzureDataLakeStorage1')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/RestResourceFromAllCountriesListAPI')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "RestService1",
+                    "type": "LinkedServiceReference"
+                },
+                "parameters": {
+                    "field_name": {
+                        "type": "string"
+                    }
+                },
+                "annotations": [],
+                "type": "RestResource",
+                "typeProperties": {
+                    "relativeUrl": {
+                        "value": "@dataset().field_name",
+                        "type": "Expression"
+                    }
+                },
+                "schema": []
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/RestService1')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/Input_file_to_data_flow')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "AzureDataLakeStorage1",
+                    "type": "LinkedServiceReference"
+                },
+                "annotations": [],
+                "type": "DelimitedText",
+                "typeProperties": {
+                    "location": {
+                        "type": "AzureBlobFSLocation",
+                        "fileName": "productData",
+                        "folderPath": "Customer",
+                        "fileSystem": "landings"
+                    },
+                    "columnDelimiter": ",",
+                    "escapeChar": "\\",
+                    "firstRowAsHeader": true,
+                    "quoteChar": "\""
+                },
+                "schema": [
+                    {
+                        "name": "ProductID",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Name",
+                        "type": "String"
+                    },
+                    {
+                        "name": "ProductNumber",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Color",
+                        "type": "String"
+                    },
+                    {
+                        "name": "StandardCost",
+                        "type": "String"
+                    },
+                    {
+                        "name": "ListPrice",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Size",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Weight",
+                        "type": "String"
+                    },
+                    {
+                        "name": "ProductCategoryID",
+                        "type": "String"
+                    },
+                    {
+                        "name": "ProductModelID",
+                        "type": "String"
+                    },
+                    {
+                        "name": "SellStartDate",
+                        "type": "String"
+                    },
+                    {
+                        "name": "SellEndDate",
+                        "type": "String"
+                    },
+                    {
+                        "name": "DiscontinuedDate",
+                        "type": "String"
+                    },
+                    {
+                        "name": "ThumbNailPhoto",
+                        "type": "String"
+                    },
+                    {
+                        "name": "ThumbnailPhotoFileName",
+                        "type": "String"
+                    },
+                    {
+                        "name": "rowguid",
+                        "type": "String"
+                    },
+                    {
+                        "name": "ModifiedDate",
+                        "type": "String"
+                    }
+                ]
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/AzureDataLakeStorage1')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/Output_data_flow_CSV')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "AzureDataLakeStorage1",
+                    "type": "LinkedServiceReference"
+                },
+                "annotations": [],
+                "type": "DelimitedText",
+                "typeProperties": {
+                    "location": {
+                        "type": "AzureBlobFSLocation",
+                        "folderPath": "FilteredProductData",
+                        "fileSystem": "landings"
+                    },
+                    "columnDelimiter": ",",
+                    "escapeChar": "\\",
+                    "firstRowAsHeader": true,
+                    "quoteChar": "\""
+                },
+                "schema": []
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/AzureDataLakeStorage1')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/Data-Flow-1')]",
+            "type": "Microsoft.DataFactory/factories/dataflows",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "type": "MappingDataFlow",
+                "typeProperties": {
+                    "sources": [
+                        {
+                            "dataset": {
+                                "referenceName": "Input_file_to_data_flow",
+                                "type": "DatasetReference"
+                            },
+                            "name": "InputProductFile"
+                        }
+                    ],
+                    "sinks": [
+                        {
+                            "dataset": {
+                                "referenceName": "Output_data_flow_CSV",
+                                "type": "DatasetReference"
+                            },
+                            "name": "sinkToMYSQL"
+                        }
+                    ],
+                    "transformations": [
+                        {
+                            "name": "filterproductdata"
+                        },
+                        {
+                            "name": "derivedColumn1"
+                        },
+                        {
+                            "name": "selectOnly10Coulumns"
+                        },
+                        {
+                            "name": "aggregateByColor"
+                        },
+                        {
+                            "name": "filterNullValues"
+                        },
+                        {
+                            "name": "sortFinalData"
+                        }
+                    ],
+                    "scriptLines": [
+                        "source(output(",
+                        "          ProductID as short,",
+                        "          Name as string,",
+                        "          ProductNumber as string,",
+                        "          Color as string,",
+                        "          StandardCost as double,",
+                        "          ListPrice as double,",
+                        "          Size as string,",
+                        "          Weight as double,",
+                        "          ProductCategoryID as short,",
+                        "          ProductModelID as short,",
+                        "          SellStartDate as string,",
+                        "          SellEndDate as string,",
+                        "          DiscontinuedDate as string,",
+                        "          ThumbNailPhoto as string,",
+                        "          ThumbnailPhotoFileName as string,",
+                        "          rowguid as string,",
+                        "          ModifiedDate as string",
+                        "     ),",
+                        "     allowSchemaDrift: true,",
+                        "     validateSchema: false,",
+                        "     ignoreNoFilesFound: false) ~> InputProductFile",
+                        "InputProductFile filter(ProductID > 800) ~> filterproductdata",
+                        "filterproductdata derive(isColorFlag = equalsIgnoreCase(Color,'black')) ~> derivedColumn1",
+                        "derivedColumn1 select(mapColumn(",
+                        "          ProductID,",
+                        "          Name,",
+                        "          ProductNumber,",
+                        "          Color,",
+                        "          StandardCost,",
+                        "          ListPrice,",
+                        "          Size,",
+                        "          Weight,",
+                        "          ProductCategoryID,",
+                        "          isColorFlag",
+                        "     ),",
+                        "     skipDuplicateMapInputs: true,",
+                        "     skipDuplicateMapOutputs: true) ~> selectOnly10Coulumns",
+                        "selectOnly10Coulumns aggregate(groupBy(Color),",
+                        "     HighestColorPrice = max(ListPrice),",
+                        "          numberOfProducts = count(ProductID)) ~> aggregateByColor",
+                        "aggregateByColor filter(!isNull(Color)) ~> filterNullValues",
+                        "filterNullValues sort(desc(HighestColorPrice, true)) ~> sortFinalData",
+                        "sortFinalData sink(allowSchemaDrift: true,",
+                        "     validateSchema: false,",
+                        "     umask: 0022,",
+                        "     preCommands: [],",
+                        "     postCommands: [],",
+                        "     skipDuplicateMapInputs: true,",
+                        "     skipDuplicateMapOutputs: true) ~> sinkToMYSQL"
+                    ]
+                }
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/datasets/Input_file_to_data_flow')]",
+                "[concat(variables('factoryId'), '/datasets/Output_data_flow_CSV')]"
+            ]
+        }
+    ]
+}
