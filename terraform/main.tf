@@ -85,7 +85,7 @@ resource "azurerm_mssql_database" "sqldb" {
   sku_name   = "Basic"
 
   # This creates the SalesLT schema/data (AdventureWorksLT sample)
-  sample_name = "SalesLT"
+  sample_name = "AdventureWorksLT"
 }
 
 # Allow Azure services (ADF, etc.) to access SQL
