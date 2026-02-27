@@ -13,6 +13,7 @@ The goal is to automate cloud resource deployment following DevOps and platform 
 Azure resources deployed:
 
 - Resource Group
+- Azure Data Lake Storage Acoount
 
 ---
 
