@@ -1,0 +1,8 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+
+# tfvars (environment secrets)
+*.tfvars
+*.auto.tfvars

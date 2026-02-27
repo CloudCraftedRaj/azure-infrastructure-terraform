@@ -15,6 +15,9 @@ Azure resources deployed:
 - Resource Group
 - Azure Data Lake Storage Acoount
 - Azure Data Factory
+- Azure SQL Server
+- Azure SQL DB with sample database 
+- Firewall Policies
 
 ---
 
@@ -24,3 +27,13 @@ Azure resources deployed:
 - Terraform
 - Azure CLI
 - GitHub
+
+## 🚀 Deployment Steps
+
+```bash
+az login
+az account show
+terraform init
+terraform plan -var-file=env/dev/dev.auto.tfvars
+terraform apply -var-file=env/dev/dev.auto.tfvars
+terraform destroy -var-file=env/dev/dev.auto.tfvars
