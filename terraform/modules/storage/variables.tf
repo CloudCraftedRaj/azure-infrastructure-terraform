@@ -1,0 +1,9 @@
+variable "storage_account_name" {}
+variable  "rg_name" {}
+variable "location" {}
+variable "account_tier" {}
+variable "account_replication_type" {}
+variable "account_kind" {}
+variable "is_hns_enabled" {}
+variable "min_tls_version" {}
+variable "allow_nested_items_to_be_public" {}

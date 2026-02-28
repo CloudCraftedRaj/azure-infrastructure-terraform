@@ -3,7 +3,7 @@
 
 resource "azurerm_mssql_server" "sqlserver" {
   # Must be globally unique
-  name                         = var.mysql_server_name
+  name                         = var.sql_server_name
   resource_group_name          = azurerm_resource_group.rg.name
   location                     = azurerm_resource_group.rg.location
 

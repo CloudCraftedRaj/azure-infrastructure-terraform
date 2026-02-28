@@ -18,20 +18,21 @@ resource "random_string" "suffix" {
 ############################################
 # 3) Create new ADLS account
 ############################################
-resource "azurerm_storage_account" "datalake" {
-  name                     = "data-projectdl${random_string.suffix.result}"
-  resource_group_name      = azurerm_resource_group.rg.name
-  location                 = azurerm_resource_group.rg.location
+module "adls_storage" {
+    source                   = "./modules/storage"
+    storage_account_name     = "data-projectdl${random_string.suffix.result}"
+    rg_name                  = azurerm_resource_group.rg.name
+    location                 = azurerm_resource_group.rg.location
 
-  account_tier             = "Standard"
-  account_replication_type = "LRS"
-  account_kind             = "StorageV2"
+    account_tier             = "Standard"
+    account_replication_type = "LRS"
+    account_kind             = "StorageV2"
 
-  # ADLS Gen2
-  is_hns_enabled           = true
+    # ADLS Gen2
+    is_hns_enabled           = true
 
-  min_tls_version          = "TLS1_2"
-  allow_nested_items_to_be_public = false
+    min_tls_version          = "TLS1_2"
+    allow_nested_items_to_be_public = false
 }
 
 # creating new two containers (landings and thirdparty)in ADLS
@@ -63,12 +64,11 @@ resource "azurerm_data_factory" "adf" {
 ############################################
 module "sql" {
   source      = "./modules/sql"
-
-  server_name = "data-projectmysqldbserver-tf"
+  sql_server_name = "data-projectmysqldbserver-tf"
   rg_name     = azurerm_resource_group.rg.name
   location    = azurerm_resource_group.rg.location
-  username    = var.sql_admin_username
-  password    = var.sql_admin_password
+  sql_admin_username    = var.sql_admin_username
+  sql_admin_password    = var.sql_admin_password
   db_name     = "data-projectsqldb-tf"
 }
 
