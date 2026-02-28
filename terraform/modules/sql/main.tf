@@ -29,14 +29,14 @@ resource "azurerm_mssql_database" "sqldb" {
 resource "azurerm_mssql_firewall_rule" "allow_azure" {
   name             = "AllowAzureServices"
   server_id        = module.sql.sql_server_id
-  start_ip_address = var.start_ip_address_allow_azure
-  end_ip_address   = var.end_ip_address_allow_azure
+  start_ip_address = "0.0.0.0"
+  end_ip_address   = "0.0.0.0"
 }
 
 # Allow your laptop/public IP so you can connect from DBeaver
 resource "azurerm_mssql_firewall_rule" "allow_my_ip" {
   name             = "AllowMyLocalIP"
   server_id        = module.sql.sql_server_id
-  start_ip_address = var.start_ip_address_localip_address
-  end_ip_address   = var.end_ip_address_localip_address
+  start_ip_address = var.local_ip
+  end_ip_address   = var.local_ip
 }

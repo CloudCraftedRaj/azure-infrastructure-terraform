@@ -9,5 +9,5 @@ variable "min_tls_version" {}
 variable "allow_nested_items_to_be_public" {}
 variable "filesystems" {
     type = list(string)
-    default = [ "landing","thirdparty" ]
+    default = [ "landings","thirdparty" ]
 }
