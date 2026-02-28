@@ -63,13 +63,13 @@ resource "azurerm_data_factory" "adf" {
 # 5) Azure SQL Server & SQL DB
 ############################################
 module "sql" {
-  source      = "./modules/sql"
-  sql_server_name = "data-projectmysqldbserver-tf"
-  rg_name     = azurerm_resource_group.rg.name
-  location    = azurerm_resource_group.rg.location
+  source                = "./modules/sql"
+  sql_server_name       = "data-projectmysqldbserver-tf"
+  rg_name               = azurerm_resource_group.rg.name
+  location              = azurerm_resource_group.rg.location
   sql_admin_username    = var.sql_admin_username
   sql_admin_password    = var.sql_admin_password
-  db_name     = "data-projectsqldb-tf"
+  db_name               = "data-projectsqldb-tf"
 }
 
 # Allow Azure services (ADF, etc.) to access SQL
