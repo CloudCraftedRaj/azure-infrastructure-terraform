@@ -59,33 +59,17 @@ resource "azurerm_data_factory" "adf" {
 }
 
 ############################################
-# 5) Azure SQL Server 
+# 5) Azure SQL Server & SQL DB
 ############################################
-resource "azurerm_mssql_server" "sqlserver" {
-  # Must be globally unique
-  name                         = "data-projectmysqldbserver-tf"
-  resource_group_name          = azurerm_resource_group.rg.name
-  location                     = azurerm_resource_group.rg.location
+module "sql" {
+  source      = "./modules/sql"
 
-  version                      = "12.0"
-  administrator_login          = var.sql_admin_username
-  administrator_login_password = var.sql_admin_password
-
-  minimum_tls_version           = "1.2"
-  public_network_access_enabled = true
-}
-
-############################################
-# 6) Azure SQL DB with sample database
-############################################
-resource "azurerm_mssql_database" "sqldb" {
-  name      = "data-projectsqldb-tf"
-  server_id = azurerm_mssql_server.sqlserver.id
-
-  sku_name   = "Basic"
-
-  # This creates the SalesLT schema/data (AdventureWorksLT sample)
-  sample_name = "AdventureWorksLT"
+  server_name = "data-projectmysqldbserver-tf"
+  rg_name     = azurerm_resource_group.rg.name
+  location    = azurerm_resource_group.rg.location
+  username    = var.sql_admin_username
+  password    = var.sql_admin_password
+  db_name     = "data-projectsqldb-tf"
 }
 
 # Allow Azure services (ADF, etc.) to access SQL
