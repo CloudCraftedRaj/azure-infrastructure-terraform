@@ -57,8 +57,7 @@ module "sql" {
   sql_admin_username                = var.sql_admin_username
   sql_admin_password                = var.sql_admin_password
   db_name                           = "data-projectsqldb-tf"
-  start_ip_address_localip_address  = var.my_public_ip
-  end_ip_address_localip_address    = var.my_public_ip
+  local_ip                          = var.my_public_ip
 }
 
 locals {
