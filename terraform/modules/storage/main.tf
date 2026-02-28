@@ -13,3 +13,9 @@ resource "azurerm_storage_account" "datalake" {
   min_tls_version          = var.min_tls_version
   allow_nested_items_to_be_public = var.allow_nested_items_to_be_public
 }
+
+# creating new two containers (landings and thirdparty)in ADLS
+resource "azurerm_storage_data_lake_gen2_filesystem" "landings" {
+  name               = toset(var.filesystems)
+  storage_account_id = azurerm_storage_account.datalake.id
+}

@@ -15,9 +15,9 @@ resource "random_string" "suffix" {
   special = false
 }
 
-############################################
-# 3) Create new ADLS account
-############################################
+###################################################################################
+# 3) Create new ADLS account by default with two containers landings and thirdparty
+###################################################################################
 module "adls_storage" {
     source                   = "./modules/storage"
     storage_account_name     = "data-projectdl${random_string.suffix.result}"
@@ -35,57 +35,30 @@ module "adls_storage" {
     allow_nested_items_to_be_public = false
 }
 
-# creating new two containers (landings and thirdparty)in ADLS
-resource "azurerm_storage_data_lake_gen2_filesystem" "landings" {
-  name               = "landings"
-  storage_account_id = azurerm_storage_account.datalake.id
-}
-
-resource "azurerm_storage_data_lake_gen2_filesystem" "thirdparty" {
-  name               = "thirdparty"
-  storage_account_id = azurerm_storage_account.datalake.id
-}
 
 ############################################
 # 4) Create new data factory account
 ############################################
-resource "azurerm_data_factory" "adf" {
-  name                = "data-projectdatafactory-tf"
-  location            = azurerm_resource_group.rg.location
-  resource_group_name = azurerm_resource_group.rg.name
-
-  identity {
-    type = "SystemAssigned"
-  }
+module "adf" {
+  source    = "./modules/adf"
+  adf_name  = "data-projectdatafactory-tf"
+  location  = azurerm_resource_group.rg.location
+  rg_name   = azurerm_resource_group.rg.name
 }
 
-############################################
-# 5) Azure SQL Server & SQL DB
-############################################
+####################################################
+# 5) Azure SQL Server & SQL DB with Firewall Rules
+####################################################
 module "sql" {
-  source                = "./modules/sql"
-  sql_server_name       = "data-projectmysqldbserver-tf"
-  rg_name               = azurerm_resource_group.rg.name
-  location              = azurerm_resource_group.rg.location
-  sql_admin_username    = var.sql_admin_username
-  sql_admin_password    = var.sql_admin_password
-  db_name               = "data-projectsqldb-tf"
-}
-
-# Allow Azure services (ADF, etc.) to access SQL
-resource "azurerm_mssql_firewall_rule" "allow_azure" {
-  name             = "AllowAzureServices"
-  server_id        = azurerm_mssql_server.sqlserver.id
-  start_ip_address = "0.0.0.0"
-  end_ip_address   = "0.0.0.0"
-}
-
-# Allow your laptop/public IP so you can connect from DBeaver
-resource "azurerm_mssql_firewall_rule" "allow_my_ip" {
-  name             = "AllowMyIP"
-  server_id        = azurerm_mssql_server.sqlserver.id
-  start_ip_address = var.my_public_ip
-  end_ip_address   = var.my_public_ip
+  source                            = "./modules/sql"
+  sql_server_name                   = "data-projectmysqldbserver-tf"
+  rg_name                           = azurerm_resource_group.rg.name
+  location                          = azurerm_resource_group.rg.location
+  sql_admin_username                = var.sql_admin_username
+  sql_admin_password                = var.sql_admin_password
+  db_name                           = "data-projectsqldb-tf"
+  start_ip_address_localip_address  = var.my_public_ip
+  end_ip_address_localip_address    = var.my_public_ip
 }
 
 locals {
@@ -93,20 +66,20 @@ locals {
   adf_template = file("${path.module}/adf_arm/ARMTemplateForFactory.json")
 
   # NEW ADLS Gen2 endpoint (your Terraform storage account)
-  adls_url = "https://${azurerm_storage_account.datalake.name}.dfs.core.windows.net/"
+  adls_url = "https://${module.adls_storage.adls_storage_account_name}.dfs.core.windows.net/"
 
   # NEW SQL connection (your Terraform SQL server/db)
-  sql_server_fqdn = "${azurerm_mssql_server.sqlserver.name}.database.windows.net"
-  sql_database    = azurerm_mssql_database.sqldb.name
+  sql_server_fqdn = "${module.sql.sql_server_name}.database.windows.net"
+  sql_database    = module.sql.db_name
 
   # These parameter keys MUST match the exported ARMTemplateParametersForFactory.json
   adf_parameters = {
     factoryName = {
-      value = azurerm_data_factory.adf.name
+      value = module.adf.adf_name
     }
 
     AzureDataLakeStorage1_accountKey = {
-      value = azurerm_storage_account.datalake.primary_access_key
+      value = module.adls_storage.primary_access_key
     }
 
     AzureDataLakeStorage1_properties_typeProperties_url = {
@@ -135,10 +108,9 @@ locals {
   }
 }
 
-############################################
+#################################################################################
 # 7)Import already existing pipeline,links,datasets JSON Config files to New ADF
-############################################
-
+#################################################################################
 resource "azurerm_resource_group_template_deployment" "adf_import" {
   name                = "import-adf-artifacts"
   resource_group_name = azurerm_resource_group.rg.name
@@ -148,8 +120,8 @@ resource "azurerm_resource_group_template_deployment" "adf_import" {
   parameters_content = jsonencode(local.adf_parameters)
 
   depends_on = [
-    azurerm_data_factory.adf,
-    azurerm_storage_account.datalake,
-    azurerm_mssql_database.sqldb
+    module.adf,
+    module.adls_storage,
+    module.sql
   ]
 }
