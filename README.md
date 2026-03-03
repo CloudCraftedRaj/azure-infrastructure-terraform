@@ -19,6 +19,10 @@ Azure resources deployed:
 - Azure SQL DB with sample database 
 - Firewall Policies
 
+Detailed architecture documentation available here:
+
+👉 [View Architecture Diagram & Explanation](https://cloudcraftedraj.github.io/azure-infrastructure-terraform/data_engineer_infra.html)
+
 ---
 
 ## ⚙️ Technologies Used
