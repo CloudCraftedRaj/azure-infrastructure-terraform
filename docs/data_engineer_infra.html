@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Azure Data Pipeline Architecture</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;600;700;800&display=swap');
+
+  :root {
+    --azure-blue: #0078D4;
+    --azure-dark: #003057;
+    --azure-light: #50E6FF;
+    --adf-orange: #F25022;
+    --sql-red: #D83B01;
+    --adls-green: #107C10;
+    --bg: #0A0E1A;
+    --surface: #111827;
+    --surface2: #1a2233;
+    --border: rgba(80,230,255,0.15);
+    --text: #E8F4FD;
+    --muted: #7B9BB5;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    font-family: 'Syne', sans-serif;
+    color: var(--text);
+    min-height: 100vh;
+    padding: 40px 24px;
+    overflow-x: hidden;
+  }
+
+  /* Background grid */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,120,212,0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,120,212,0.05) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .wrapper {
+    position: relative;
+    z-index: 1;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+
+  /* Header */
+  .header {
+    text-align: center;
+    margin-bottom: 48px;
+  }
+  .header .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(0,120,212,0.15);
+    border: 1px solid rgba(0,120,212,0.4);
+    border-radius: 20px;
+    padding: 6px 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--azure-light);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+  .header h1 {
+    font-size: clamp(24px, 4vw, 42px);
+    font-weight: 800;
+    line-height: 1.1;
+    background: linear-gradient(135deg, #fff 0%, var(--azure-light) 60%, var(--azure-blue) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 10px;
+  }
+  .header p {
+    color: var(--muted);
+    font-size: 14px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* Region label */
+  .region-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(0,48,87,0.6);
+    border: 1px solid rgba(0,120,212,0.3);
+    border-radius: 6px;
+    padding: 4px 12px;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--azure-light);
+    margin-bottom: 16px;
+  }
+
+  /* Main flow */
+  .flow {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    margin-bottom: 40px;
+  }
+
+  /* Arrow connector */
+  .arrow {
+    display: flex;
+    align-items: center;
+    padding: 0 4px;
+    flex-shrink: 0;
+  }
+  .arrow svg {
+    width: 36px;
+    height: 24px;
+  }
+
+  /* Cards */
+  .card {
+    flex: 1;
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+    min-width: 0;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    border-radius: 14px 14px 0 0;
+  }
+  .card:hover {
+    box-shadow: 0 0 30px rgba(0,120,212,0.15);
+    border-color: rgba(80,230,255,0.35);
+  }
+
+  .card.sql::before { background: linear-gradient(90deg, var(--sql-red), #FF6B35); }
+  .card.adf::before { background: linear-gradient(90deg, var(--adf-orange), #FFB900); }
+  .card.adls::before { background: linear-gradient(90deg, var(--adls-green), #00CC6A); }
+  .card.api::before { background: linear-gradient(90deg, #881798, #C239B3); }
+
+  .card-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    margin-bottom: 12px;
+  }
+  .sql .card-icon { background: rgba(216,59,1,0.2); }
+  .adf .card-icon { background: rgba(242,80,34,0.2); }
+  .adls .card-icon { background: rgba(16,124,16,0.2); }
+  .api .card-icon { background: rgba(194,57,179,0.2); }
+
+  .card-title {
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: 4px;
+    letter-spacing: 0.02em;
+  }
+  .card-subtitle {
+    font-size: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--muted);
+    margin-bottom: 14px;
+  }
+  .card-items {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--surface2);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    color: #9FC8E8;
+    border: 1px solid rgba(255,255,255,0.04);
+  }
+  .dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .sql .dot { background: var(--sql-red); }
+  .adf .dot { background: var(--adf-orange); }
+  .adls .dot { background: var(--adls-green); }
+  .api .dot { background: #C239B3; }
+
+  /* ADF Pipelines section */
+  .pipelines-section {
+    margin-bottom: 40px;
+  }
+  .section-label {
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .section-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .pipelines-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+  }
+
+  .pipeline-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    position: relative;
+  }
+  .pipeline-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    border-radius: 10px 10px 0 0;
+    background: linear-gradient(90deg, var(--adf-orange), #FFB900);
+  }
+  .pipeline-name {
+    font-size: 11px;
+    font-weight: 700;
+    margin-bottom: 6px;
+    color: #FFD09B;
+  }
+  .pipeline-desc {
+    font-size: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+  .pipeline-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 8px;
+  }
+  .tag {
+    font-size: 9px;
+    font-family: 'JetBrains Mono', monospace;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(242,80,34,0.12);
+    border: 1px solid rgba(242,80,34,0.25);
+    color: #FFB580;
+  }
+
+  /* Data Flow section */
+  .dataflow-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px;
+    margin-bottom: 40px;
+    position: relative;
+    overflow: hidden;
+  }
+  .dataflow-section::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #0078D4, #50E6FF);
+    border-radius: 14px 14px 0 0;
+  }
+  .dataflow-title {
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: 16px;
+    color: var(--azure-light);
+  }
+  .dataflow-steps {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+  .df-step {
+    flex-shrink: 0;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    text-align: center;
+    min-width: 100px;
+  }
+  .df-step-icon { font-size: 16px; margin-bottom: 4px; }
+  .df-step-name {
+    font-size: 10px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 2px;
+  }
+  .df-step-type {
+    font-size: 9px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--muted);
+  }
+  .df-arrow {
+    padding: 0 6px;
+    flex-shrink: 0;
+    color: var(--azure-light);
+    font-size: 16px;
+  }
+
+  /* Infra summary */
+  .infra-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 40px;
+  }
+  .infra-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+  }
+  .infra-label {
+    font-size: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 8px;
+  }
+  .infra-value {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    word-break: break-all;
+  }
+  .infra-note {
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 4px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* Legend */
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    justify-content: center;
+    margin-bottom: 20px;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--muted);
+  }
+  .legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+  }
+
+  /* Footer */
+  .footer {
+    text-align: center;
+    font-size: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--muted);
+    border-top: 1px solid var(--border);
+    padding-top: 20px;
+  }
+
+  @media (max-width: 768px) {
+    .flow { flex-direction: column; }
+    .arrow { display: none; }
+    .pipelines-grid { grid-template-columns: repeat(2, 1fr); }
+    .infra-grid { grid-template-columns: 1fr; }
+    .dataflow-steps { flex-direction: column; align-items: flex-start; }
+    .df-arrow { transform: rotate(90deg); }
+  }
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="badge">
+      <span>🏗</span> Terraform Managed Infrastructure
+    </div>
+    <h1>Azure Data Pipeline Architecture</h1>
+    <p>Resource Group: rg-my-data-project · Region: South India</p>
+  </div>
+
+  <!-- Region badge -->
+  <div style="text-align:center; margin-bottom:28px;">
+    <span class="region-tag">📍 Azure Region: South India &nbsp;|&nbsp; Provisioned via Terraform</span>
+  </div>
+
+  <!-- Main 3-tier flow -->
+  <div class="section-label">Data Flow Overview</div>
+  <div class="flow" style="margin-bottom:40px;">
+
+    <!-- Source: Azure SQL -->
+    <div class="card sql">
+      <div class="card-icon">🗄</div>
+      <div class="card-title">Azure SQL Database</div>
+      <div class="card-subtitle">my-sqldbserver.database.windows.net</div>
+      <div class="card-items">
+        <div class="item"><span class="dot"></span>SalesLT.Product</div>
+        <div class="item"><span class="dot"></span>SalesLT.Customer</div>
+        <div class="item"><span class="dot"></span>SalesLT.* (AdventureWorks)</div>
+      </div>
+    </div>
+
+    <!-- Arrow -->
+    <div class="arrow">
+      <svg viewBox="0 0 36 24" fill="none">
+        <path d="M2 12 H28 M22 6 L28 12 L22 18" stroke="#50E6FF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+
+    <!-- Orchestrator: ADF -->
+    <div class="card adf" style="flex:1.4;">
+      <div class="card-icon">⚙</div>
+      <div class="card-title">Azure Data Factory</div>
+      <div class="card-subtitle">my-adf-instance · System Assigned Identity</div>
+      <div class="card-items">
+        <div class="item"><span class="dot"></span>Linked Service: Azure SQL</div>
+        <div class="item"><span class="dot"></span>Linked Service: ADLS Gen2</div>
+        <div class="item"><span class="dot"></span>Linked Service: REST API</div>
+        <div class="item"><span class="dot"></span>8 Pipelines · 1 Data Flow</div>
+      </div>
+    </div>
+
+    <!-- Arrow -->
+    <div class="arrow">
+      <svg viewBox="0 0 36 24" fill="none">
+        <path d="M2 12 H28 M22 6 L28 12 L22 18" stroke="#50E6FF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+
+    <!-- Sink: ADLS -->
+    <div class="card adls">
+      <div class="card-icon">🗂</div>
+      <div class="card-title">Azure Data Lake Gen2</div>
+      <div class="card-subtitle">my-datalake-storage (HNS Enabled)</div>
+      <div class="card-items">
+        <div class="item"><span class="dot"></span>Container: landings/</div>
+        <div class="item"><span class="dot"></span>Container: thirdparty/</div>
+        <div class="item"><span class="dot"></span>CSV, JSON, TXT formats</div>
+      </div>
+    </div>
+
+    <!-- Arrow -->
+    <div class="arrow">
+      <svg viewBox="0 0 36 24" fill="none">
+        <path d="M2 12 H14 M8 6 L2 12 L8 18" stroke="#50E6FF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="3,3"/>
+      </svg>
+    </div>
+
+    <!-- External: REST API -->
+    <div class="card api">
+      <div class="card-icon">🌐</div>
+      <div class="card-title">External REST API</div>
+      <div class="card-subtitle">api.external-service.com/v3/data</div>
+      <div class="card-items">
+        <div class="item"><span class="dot"></span>GET requests (Anonymous)</div>
+        <div class="item"><span class="dot"></span>JSON response → ADLS</div>
+        <div class="item"><span class="dot"></span>Pagination supported</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ADF Pipelines -->
+  <div class="pipelines-section">
+    <div class="section-label">ADF Pipelines (deployed via ARM template in Terraform)</div>
+    <div class="pipelines-grid">
+
+      <div class="pipeline-card">
+        <div class="pipeline-name">copy_table_from_SQL_to_ADLS</div>
+        <div class="pipeline-desc">Copies a single SQL table (e.g. Product) to ADLS as CSV</div>
+        <div class="pipeline-tags"><span class="tag">Copy</span><span class="tag">SQL→ADLS</span></div>
+      </div>
+
+      <div class="pipeline-card">
+        <div class="pipeline-name">copy_All_tables_to_folder</div>
+        <div class="pipeline-desc">Lookup all tables in schema → ForEach → Copy each to JSON folder</div>
+        <div class="pipeline-tags"><span class="tag">Lookup</span><span class="tag">ForEach</span><span class="tag">Dynamic</span></div>
+      </div>
+
+      <div class="pipeline-card">
+        <div class="pipeline-name">If_condition_check_copy</div>
+        <div class="pipeline-desc">Checks if product count > 200, copies to ADLS if true, then executes nested pipeline</div>
+        <div class="pipeline-tags"><span class="tag">IfCondition</span><span class="tag">ExecutePipeline</span></div>
+      </div>
+
+      <div class="pipeline-card">
+        <div class="pipeline-name">NestedIf_copy (child)</div>
+        <div class="pipeline-desc">Checks if customer count > 500, copies customer data to ADLS if true</div>
+        <div class="pipeline-tags"><span class="tag">Nested</span><span class="tag">IfCondition</span></div>
+      </div>
+
+      <div class="pipeline-card">
+        <div class="pipeline-name">Meta_data_pipeline</div>
+        <div class="pipeline-desc">GetMetadata checks if a file exists in thirdparty, then copies it to ADLS if found</div>
+        <div class="pipeline-tags"><span class="tag">GetMetadata</span><span class="tag">IfCondition</span></div>
+      </div>
+
+      <div class="pipeline-card">
+        <div class="pipeline-name">Meta_data_forloop</div>
+        <div class="pipeline-desc">Gets folder childItems, loops through each, copies files to ADLS landings container</div>
+        <div class="pipeline-tags"><span class="tag">GetMetadata</span><span class="tag">ForEach</span></div>
+      </div>
+
+      <div class="pipeline-card">
+        <div class="pipeline-name">Rest API Example</div>
+        <div class="pipeline-desc">Calls external REST API with field_name param, stores response as JSON in ADLS</div>
+        <div class="pipeline-tags"><span class="tag">REST</span><span class="tag">Copy</span><span class="tag">JSON</span></div>
+      </div>
+
+      <div class="pipeline-card">
+        <div class="pipeline-name">Data-Flow-Pipeline-1</div>
+        <div class="pipeline-desc">Executes the Mapping Data Flow to transform product data</div>
+        <div class="pipeline-tags"><span class="tag">DataFlow</span><span class="tag">Transform</span></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Data Flow Transformations -->
+  <div class="dataflow-section">
+    <div class="dataflow-title">🔄 Mapping Data Flow — Data-Flow-1 (Transformation Steps)</div>
+    <div class="dataflow-steps">
+      <div class="df-step">
+        <div class="df-step-icon">📄</div>
+        <div class="df-step-name">InputProductFile</div>
+        <div class="df-step-type">Source · CSV</div>
+      </div>
+      <div class="df-arrow">→</div>
+      <div class="df-step">
+        <div class="df-step-icon">🔍</div>
+        <div class="df-step-name">Filter</div>
+        <div class="df-step-type">ProductID > 800</div>
+      </div>
+      <div class="df-arrow">→</div>
+      <div class="df-step">
+        <div class="df-step-icon">📐</div>
+        <div class="df-step-name">Derived Column</div>
+        <div class="df-step-type">isColorFlag bool</div>
+      </div>
+      <div class="df-arrow">→</div>
+      <div class="df-step">
+        <div class="df-step-icon">🎯</div>
+        <div class="df-step-name">Select</div>
+        <div class="df-step-type">10 columns</div>
+      </div>
+      <div class="df-arrow">→</div>
+      <div class="df-step">
+        <div class="df-step-icon">📊</div>
+        <div class="df-step-name">Aggregate</div>
+        <div class="df-step-type">Group by Color</div>
+      </div>
+      <div class="df-arrow">→</div>
+      <div class="df-step">
+        <div class="df-step-icon">🚫</div>
+        <div class="df-step-name">Filter Nulls</div>
+        <div class="df-step-type">!isNull(Color)</div>
+      </div>
+      <div class="df-arrow">→</div>
+      <div class="df-step">
+        <div class="df-step-icon">↕️</div>
+        <div class="df-step-name">Sort</div>
+        <div class="df-step-type">desc(ListPrice)</div>
+      </div>
+      <div class="df-arrow">→</div>
+      <div class="df-step">
+        <div class="df-step-icon">💾</div>
+        <div class="df-step-name">Sink</div>
+        <div class="df-step-type">FilteredProductData/</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Infrastructure Summary -->
+  <div class="section-label">Terraform Resource Summary (with sample variable names)</div>
+  <div class="infra-grid">
+    <div class="infra-card">
+      <div class="infra-label">Resource Group</div>
+      <div class="infra-value">rg-my-data-project</div>
+      <div class="infra-note">Location: southindia</div>
+    </div>
+    <div class="infra-card">
+      <div class="infra-label">SQL Server</div>
+      <div class="infra-value">my-sqldbserver.database.windows.net</div>
+      <div class="infra-note">SQL Auth · TLS 1.2 · v12.0</div>
+    </div>
+    <div class="infra-card">
+      <div class="infra-label">SQL Database</div>
+      <div class="infra-value">my-sqldb (Basic SKU)</div>
+      <div class="infra-note">Sample: AdventureWorksLT</div>
+    </div>
+    <div class="infra-card">
+      <div class="infra-label">Data Factory</div>
+      <div class="infra-value">my-adf-instance</div>
+      <div class="infra-note">System Assigned Identity · Public</div>
+    </div>
+    <div class="infra-card">
+      <div class="infra-label">ADLS Gen2 Storage</div>
+      <div class="infra-value">mystorageaccount{suffix}</div>
+      <div class="infra-note">HNS Enabled · Standard LRS · TLS 1.2</div>
+    </div>
+    <div class="infra-card">
+      <div class="infra-label">Storage Containers</div>
+      <div class="infra-value">landings / thirdparty</div>
+      <div class="infra-note">ADLS Gen2 filesystems</div>
+    </div>
+  </div>
+
+  <!-- Firewall note -->
+  <div style="background:rgba(0,120,212,0.08); border:1px solid rgba(0,120,212,0.25); border-radius:10px; padding:14px 18px; margin-bottom:32px; font-size:11px; font-family:'JetBrains Mono',monospace; color:var(--muted);">
+    🔒 <strong style="color:var(--azure-light)">Firewall Rules:</strong>&nbsp;
+    AllowAzureServices (0.0.0.0) + AllowMyLocalIP (your IP via Terraform variable)
+  </div>
+
+  <!-- Legend -->
+  <div class="legend">
+    <div class="legend-item"><span class="legend-dot" style="background:var(--sql-red)"></span>Azure SQL Database</div>
+    <div class="legend-item"><span class="legend-dot" style="background:var(--adf-orange)"></span>Azure Data Factory</div>
+    <div class="legend-item"><span class="legend-dot" style="background:var(--adls-green)"></span>Azure Data Lake Gen2</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#C239B3"></span>External REST API</div>
+    <div class="legend-item"><span class="legend-dot" style="background:var(--azure-blue)"></span>Terraform Managed</div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    Infrastructure as Code · Managed by Terraform (azurerm provider) · ADF artifacts deployed via ARM Template Deployment
+  </div>
+
+</div>
+</body>
+</html>
